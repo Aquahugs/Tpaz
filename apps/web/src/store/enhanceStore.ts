@@ -1,10 +1,16 @@
 import { create } from 'zustand';
 import { EnhanceState, EnhanceParams } from '../types/enhance';
 
-interface EnhanceStore extends EnhanceState {
+interface EnhanceStore {
+  image: File | null;
+  params: EnhanceParams;
+  enhancing: boolean;
+  progress: number;
+  error: string | null;
+  enhancedImageUrl: string | null;
   setImage: (image: File | null) => void;
   setParams: (params: Partial<EnhanceParams>) => void;
-  setEnhancing: (isEnhancing: boolean) => void;
+  setEnhancing: (enhancing: boolean) => void;
   setProgress: (progress: number) => void;
   setError: (error: string | null) => void;
   setEnhancedImageUrl: (url: string | null) => void;

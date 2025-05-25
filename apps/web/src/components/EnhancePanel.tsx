@@ -178,7 +178,7 @@ export function EnhancePanel() {
                       {[1, 2, 4].map((scale) => (
                         <button
                           key={scale}
-                          onClick={() => setParams({ scale })}
+                          onClick={() => setParams({ scale: scale as 1 | 2 | 4 })}
                           disabled={enhancing}
                           className={`
                             flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200

@@ -19,7 +19,10 @@ export interface EnhanceResponse {
 }
 
 export interface StatusResponse {
-  state: 'pending' | 'processing' | 'done' | 'failed';
-  progress?: number;
-  error?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress: number
+  output_url?: string
+  output_width?: number
+  output_height?: number
+  error?: string
 } 
