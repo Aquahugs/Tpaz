@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "topaz",
+      "source": "@topaz/v1.4#1rov13lmapov2oo",
+      "integrity": "sha512-4/UTdVU7b3Jhfeaz5jBvPLHMjKnwSLWHXEExSpWWNYYVsFsv1OXOckA4JZPU5n6Bqk2Mgz3Ca+cmrxIuXIb5cw==",
+      "installerVersion": "6.1.3"
+    }
+  ]
+}

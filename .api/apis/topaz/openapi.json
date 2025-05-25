@@ -1,0 +1,103 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Account API",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Topaz Labs",
+      "url": "https://www.topazlabs.com",
+      "email": "enterprise@topazlabs.com"
+    },
+    "description": "Dedicated for account management\n"
+  },
+  "servers": [
+    {
+      "url": "https://api.topazlabs.com/account/v1",
+      "description": "Production Base URL"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Credits",
+      "description": "The following endpoint can be used to see your current credit balance with Topaz API. If you would like to add more credits to your account, please visit https://topazlabs.com/my-account/subscriptions/\n"
+    }
+  ],
+  "paths": {
+    "/credits/balance": {
+      "get": {
+        "tags": [
+          "Credits"
+        ],
+        "summary": "Get Credit Balance",
+        "operationId": "getCreditBalance",
+        "description": "Allows you to view your current API credit balance.\n",
+        "responses": {
+          "200": {
+            "description": "Credit balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "available_credits": {
+                      "type": "integer",
+                      "description": "The number of credits available to you.",
+                      "example": 100
+                    },
+                    "reserved_credits": {
+                      "type": "integer",
+                      "description": "The number of credits reserved by you (if applicable).",
+                      "example": 10
+                    },
+                    "total_credits": {
+                      "type": "integer",
+                      "description": "The total number of credits in your account (available credits + reserved credits).",
+                      "example": 110
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreditBalanceResponse": {
+        "type": "object",
+        "properties": {
+          "available_credits": {
+            "type": "integer",
+            "description": "The number of credits available to you.",
+            "example": 100
+          },
+          "reserved_credits": {
+            "type": "integer",
+            "description": "The number of credits reserved by you (if applicable).",
+            "example": 10
+          },
+          "total_credits": {
+            "type": "integer",
+            "description": "The total number of credits in your account (available credits + reserved credits).",
+            "example": 110
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Authentication via the Topaz generated key in the `X-API-Key` header.\n"
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ]
+}
