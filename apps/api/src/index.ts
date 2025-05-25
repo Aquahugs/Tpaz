@@ -1,35 +1,43 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import multer from 'multer';
 import { enhanceRouter } from './routes/enhance';
-import { errorHandler } from './middleware/errorHandler';
-
-dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Configure CORS for production
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://topaz-image-enhancement.vercel.app'] // Your actual Vercel URL
+    : ['http://localhost:5173'],
   credentials: true
 }));
 
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api', enhanceRouter);
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB
+  }
+});
 
-// Error handling
-app.use(errorHandler);
+app.use('/api/enhance', upload.single('image'), enhanceRouter);
 
-// Health check
-app.get('/health', (req, res) => {
+// Health check endpoint
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 API server running on port ${PORT}`);
-});
+// For Vercel serverless functions
+export default app;
 
-export default app; 
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`🚀 API server running on port ${PORT}`);
+  });
+} 

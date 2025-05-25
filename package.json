@@ -2,11 +2,12 @@
   "name": "topaz-playground",
   "private": true,
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
     "test": "turbo test",
-    "type-check": "turbo type-check"
+    "type-check": "turbo run type-check",
+    "vercel-build": "pnpm build"
   },
   "devDependencies": {
     "@turbo/gen": "^1.10.12",
@@ -14,9 +15,9 @@
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
     "prettier": "^3.0.0",
-    "turbo": "^1.10.12"
+    "turbo": "^1.10.7"
   },
-  "packageManager": "pnpm@8.15.6",
+  "packageManager": "pnpm@8.6.10",
   "engines": {
     "node": ">=18"
   }
