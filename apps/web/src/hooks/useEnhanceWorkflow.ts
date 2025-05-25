@@ -25,6 +25,7 @@ export function useEnhanceWorkflow() {
     setEnhancing(true)
     setProgress(0)
     setError(null)
+    setEnhancedImageUrl(null)
 
     try {
       // Start enhancement
