@@ -1,96 +1,97 @@
-# Topaz Image Enhancement UI
 
-A modern web interface for enhancing images using Topaz Labs' AI models, featuring real-time comparison tools and fine-tuned controls.
+### Available Scripts
 
-![UI Preview](docs/preview.png)
+From the root directory:
 
-## Features
+- `pnpm dev` - Start both frontend and backend in development mode
+- `pnpm build` - Build both applications for production
+- `pnpm test` - Run tests across all packages
+- `pnpm type-check` - Run TypeScript type checking
+- `pnpm lint` - Run ESLint across all packages
 
-- 🖼️ Real-time before/after comparison with interactive slider
-- 🔍 Advanced zoom and pan capabilities for detailed inspection
-- 🎚️ Precise control over enhancement parameters
-- 🎯 Multiple enhancement presets optimized for different use cases
-- 📱 Responsive design with touch support
-- ⚡ Fast processing with real-time progress tracking
+### API Endpoints
 
-## Enhancement Models
+- `POST /api/enhance` - Start image enhancement
+- `GET /api/status/:processId` - Check enhancement status
+- `GET /api/download/:processId` - Download enhanced image
+- `GET /api/health` - Health check endpoint
 
-This project leverages two specialized Topaz enhancement models:
+### Processing Modes
 
-### Standard V2 (Basic Preset)
-- **Best for**: High-quality photos shot on good glass
-- **Characteristics**: 
-  - Fast and consistent processing
-  - Gentle cleaning and sharpening
-  - Preserves original image characteristics
-  - Balanced enhancement approach
+The application supports two processing modes based on the model type:
 
-### High Fidelity V2 (Sharp Preset)
-- **Best for**: Images requiring maximum detail preservation
-- **Characteristics**:
-  - Enhanced micro-texture preservation
-  - Superior color nuance retention
-  - Higher processing time
-  - Maximum quality output
+#### Synchronous Processing (Traditional Models)
+- **Models**: Standard V2, High Fidelity V2
+- Returns enhanced image immediately
+- No polling required
+- Faster turnaround time
+- Best for general photo enhancement
 
-## Local Development Setup
+#### Asynchronous Processing (Generative Models)
+- **Models**: Recovery V2, Super Focus V2, Redefine
+- Returns a `processId` for status polling
+- Progress tracking with real-time updates
+- Download available when complete
+- More intensive AI processing
 
-### Prerequisites
+### Troubleshooting
 
-- **Node.js** (v18 or higher)
-- **pnpm** (v8.15.6 or higher)
-- **Topaz API Key** (required for image enhancement)
+**Common Issues:**
 
-### Installation
+1. **"No API key" error**
+   - Ensure your Topaz API key is correctly set in `apps/api/.env`
+   - Verify the API key is valid and has sufficient credits
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd topaz-playground
-   ```
+2. **CORS errors**
+   - Check that `CORS_ORIGIN` in `.env` matches your frontend URL
+   - Default should be `http://localhost:5173`
 
-2. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
+3. **Port conflicts**
+   - Frontend runs on port 5173, backend on 3001
+   - Change ports in `package.json` scripts if needed
 
-3. **Set up environment variables**
-   
-   Create a `.env` file in the `apps/api` directory:
-   ```bash
-   # apps/api/.env
-   TOPAZ_API_KEY=your-topaz-api-key-here
-   CORS_ORIGIN=http://localhost:5173
-   PORT=3001
-   NODE_ENV=development
-   ```
+4. **Dependencies not installing**
+   - Ensure you're using pnpm (not npm or yarn)
+   - Try `pnpm install --frozen-lockfile`
 
-   **Getting a Topaz API Key:**
-   - Sign up at [Topaz Labs API](https://www.topazlabs.com/api)
-   - Navigate to your API dashboard
-   - Generate a new API key
-   - Copy the key to your `.env` file
+5. **TypeScript errors**
+   - Run `pnpm type-check` to see detailed errors
+   - Ensure all dependencies are installed
 
-4. **Start the development servers**
-   ```bash
-   pnpm dev
-   ```
+6. **Enhancement fails with 404**
+   - Check that your Topaz API key has sufficient credits
+   - Verify the API endpoints are correct in the logs
+   - Some models may not be available in your API tier
 
-   This will start:
-   - **Frontend (Web)**: http://localhost:5173
-   - **Backend (API)**: http://localhost:3001
+7. **Status polling issues**
+   - The app handles both async and direct processing modes
+   - Check browser console for detailed error messages
+   - Generative models take longer to process
 
-### Usage
+8. **Model-specific errors**
+   - Recovery V2: Ensure input image is very small (32-256px work best)
+   - Super Focus V2: Works best on blurred images
+   - Redefine: Requires either prompt or autoprompt enabled
 
-1. **Open your browser** to http://localhost:5173
-2. **Upload an image** by dragging and dropping or clicking to select
-   - Supported formats: JPEG, PNG, TIFF, WebP
-   - Maximum file size: 50MB
-3. **Choose enhancement settings**:
-   - **Preset**: Basic (Standard V2) or Sharp (High Fidelity V2)
-   - **Detail**: Adjust sharpening intensity (0-1)
-   - **Scale**: Choose output scale (1x, 2x, or 4x)
-4. **Click "Enhance"** to start processing
-5. **View results** with the interactive before/after comparison slider
+### Tech Stack
 
-### Project Structure
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Zustand
+- **Backend**: Node.js, Express, TypeScript, Zod validation
+- **Build System**: Turborepo with pnpm workspaces
+- **UI Components**: Radix UI primitives
+- **Image Processing**: Topaz Labs API integration (5 models)
+- **File Upload**: Multer with memory storage
+- **State Management**: Zustand for client state
+- **Validation**: Zod schemas for type-safe API requests
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and type checking
+5. Submit a pull request
+
+### License
+
+[Add your license information here]
