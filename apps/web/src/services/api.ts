@@ -32,8 +32,35 @@ export async function enhanceImage(
   formData.append('detail', params.detail.toString())
   formData.append('scale', params.scale.toString())
 
+  // Add generative model parameters
+  if (params.creativity !== undefined) {
+    formData.append('creativity', params.creativity.toString())
+  }
+  if (params.texture !== undefined) {
+    formData.append('texture', params.texture.toString())
+  }
+  if (params.prompt) {
+    formData.append('prompt', params.prompt)
+  }
+  if (params.autoprompt !== undefined) {
+    formData.append('autoprompt', params.autoprompt.toString())
+  }
+  if (params.focus_boost !== undefined) {
+    formData.append('focus_boost', params.focus_boost.toString())
+  }
+  if (params.seed !== undefined) {
+    formData.append('seed', params.seed.toString())
+  }
+  if (params.sharpen !== undefined) {
+    formData.append('sharpen', params.sharpen.toString())
+  }
+  if (params.denoise !== undefined) {
+    formData.append('denoise', params.denoise.toString())
+  }
+
   const url = `${API_BASE_URL}/api/enhance`
-  console.log('Making request to:', url) // Debug log
+  console.log('Making request to:', url)
+  console.log('Parameters:', params)
 
   const response = await fetch(url, {
     method: 'POST',

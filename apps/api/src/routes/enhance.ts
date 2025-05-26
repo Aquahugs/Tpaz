@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
-import { EnhanceRequestSchema, TOPAZ_MODELS, type TopazEnhanceResponse, type TopazStatusResponse } from '../types/topaz';
+import { EnhanceRequestSchema, TOPAZ_MODELS, MODEL_CATEGORIES, type TopazEnhanceResponse, type TopazStatusResponse } from '../types/topaz';
 import '../types/global'; // Import global type declarations
 
 const router = express.Router();
@@ -58,7 +58,7 @@ router.post('/enhance', upload.single('image'), async (req, res, next) => {
       });
     }
 
-    const { preset, detail, scale } = validation.data;
+    const { preset, detail, scale, creativity, texture, prompt, autoprompt, focus_boost, seed, sharpen, denoise } = validation.data;
 
     // Prepare form data for Topaz API
     const formData = new FormData();
@@ -67,19 +67,79 @@ router.post('/enhance', upload.single('image'), async (req, res, next) => {
       contentType: req.file.mimetype
     });
 
-    // Map our parameters to Topaz API format
-    const model = TOPAZ_MODELS[preset];
+    // Determine endpoint and model based on preset
+    let endpoint: string;
+    let model: string;
+
+    switch (preset) {
+      case 'basic':
+      case 'sharp':
+        // Traditional GAN models use standard enhance endpoint
+        endpoint = `${TOPAZ_BASE_URL}/image/v1/enhance`;
+        model = TOPAZ_MODELS[preset];
+        formData.append('sharpen', (sharpen ?? detail).toString());
+        if (denoise !== undefined) {
+          formData.append('denoise', denoise.toString());
+        }
+        break;
+
+      case 'recovery':
+        // Recovery V2 uses enhance-gen endpoint
+        endpoint = `${TOPAZ_BASE_URL}/image/v1/enhance-gen/async`;
+        model = 'Recovery V2';
+        formData.append('detail', detail.toString());
+        break;
+
+      case 'redefine':
+        // Redefine uses enhance-gen endpoint
+        endpoint = `${TOPAZ_BASE_URL}/image/v1/enhance-gen/async`;
+        model = 'Redefine';
+        if (autoprompt) {
+          formData.append('autoprompt', 'true');
+        } else if (prompt) {
+          formData.append('prompt', prompt);
+        }
+        if (creativity !== undefined) {
+          formData.append('creativity', creativity.toString());
+        }
+        if (texture !== undefined) {
+          formData.append('texture', texture.toString());
+        }
+        if (sharpen !== undefined) {
+          formData.append('sharpen', sharpen.toString());
+        }
+        if (denoise !== undefined) {
+          formData.append('denoise', denoise.toString());
+        }
+        break;
+
+      case 'superfocus':
+        // Super Focus V2 uses sharpen-gen endpoint
+        endpoint = `${TOPAZ_BASE_URL}/image/v1/sharpen-gen/async`;
+        model = 'Super Focus V2';
+        formData.append('detail', detail.toString());
+        if (focus_boost !== undefined) {
+          formData.append('focus_boost', focus_boost.toString());
+        }
+        if (seed !== undefined) {
+          formData.append('seed', seed.toString());
+        }
+        break;
+
+      default:
+        throw new Error(`Unknown preset: ${preset}`);
+    }
+
     formData.append('model', model);
-    formData.append('sharpen', detail.toString());
     formData.append('scale', scale.toString());
 
-    console.log('Sending request to Topaz API...');
+    console.log('=== API CALL DETAILS ===');
+    console.log('Endpoint:', endpoint);
     console.log('Model:', model);
-    console.log('Sharpen:', detail);
-    console.log('Scale:', scale);
+    console.log('Parameters:', { preset, detail, scale, creativity, texture, prompt, autoprompt, focus_boost, seed, sharpen, denoise });
 
     // Send request to Topaz API
-    const response = await fetch(`${TOPAZ_BASE_URL}/image/v1/enhance`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'X-API-Key': process.env.TOPAZ_API_KEY
@@ -93,32 +153,35 @@ router.post('/enhance', upload.single('image'), async (req, res, next) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.log('Topaz API error response:', errorText);
-      throw new Error(`Topaz API error: ${response.status} ${errorText}`);
+      
+      // Return 400 for client errors (bad parameters) to make debugging easier
+      const statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+      return res.status(statusCode).json({ 
+        error: `Topaz API error: ${response.status}`, 
+        details: errorText 
+      });
     }
 
-    // Check if the response is JSON (async processing) or image (direct processing)
     const contentType = response.headers.get('content-type') || '';
-    
+
     if (contentType.includes('application/json')) {
       // Async processing - return process ID
       const result = await response.json() as TopazEnhanceResponse;
-      console.log('Topaz API success response (async):', result);
+      console.log('Topaz API async response:', result);
 
       res.json({
         processId: result.process_id,
-        eta: result.eta
+        eta: result.eta,
+        isAsync: true
       });
     } else if (contentType.includes('image/')) {
-      // Direct processing - image is ready immediately
+      // Direct processing - image is ready immediately (traditional models only)
       console.log('Topaz API returned image directly');
       
-      // Generate a fake process ID for consistency
+      const imageBuffer = await response.buffer();
       const fakeProcessId = `direct_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Get the image buffer
-      const imageBuffer = await response.buffer();
-      
-      // Store in cache
+      // Cache the image
       imageCache[fakeProcessId] = {
         buffer: imageBuffer,
         contentType: contentType,
@@ -128,14 +191,15 @@ router.post('/enhance', upload.single('image'), async (req, res, next) => {
       res.json({
         processId: fakeProcessId,
         eta: 0, // Image is ready immediately
-        status: 'completed'
+        status: 'completed',
+        isAsync: false
       });
     } else {
       throw new Error(`Unexpected response content type: ${contentType}`);
     }
 
   } catch (error) {
-    console.error('Enhancement error:', error);
+    console.log('Enhancement error:', error);
     next(error);
   }
 });
@@ -144,16 +208,16 @@ router.post('/enhance', upload.single('image'), async (req, res, next) => {
 router.get('/status/:processId', async (req, res, next) => {
   try {
     const { processId } = req.params;
-    console.log('Checking status for processId:', processId);
+    console.log('Status check for processId:', processId);
 
     // Check if this is a direct processing result
     if (processId.startsWith('direct_')) {
       const cached = imageCache[processId];
-      if (cached) {
+      if (cached && cached.ready) {
         return res.json({
           state: 'done',
-          progress: 100,
-          status: 'completed'
+          status: 'completed',
+          progress: 100
         });
       } else {
         return res.status(404).json({ error: 'Process not found' });
@@ -164,7 +228,11 @@ router.get('/status/:processId', async (req, res, next) => {
       return res.status(500).json({ error: 'Topaz API key not configured' });
     }
 
-    const response = await fetch(`${TOPAZ_BASE_URL}/image/v1/status/${processId}`, {
+    // Get status from Topaz API
+    const statusUrl = `${TOPAZ_BASE_URL}/image/v1/status/${processId}`;
+    console.log('Status URL:', statusUrl);
+
+    const response = await fetch(statusUrl, {
       headers: {
         'X-API-Key': process.env.TOPAZ_API_KEY
       }
@@ -181,7 +249,19 @@ router.get('/status/:processId', async (req, res, next) => {
     const status = await response.json() as TopazStatusResponse;
     console.log('Status response:', status);
 
-    res.json(status);
+    // Normalize the response for our frontend
+    const normalizedStatus = {
+      state: status.state,
+      status: status.status,
+      progress: status.progress || 0,
+      error: status.error,
+      output_width: status.output_width,
+      output_height: status.output_height,
+      output_format: status.output_format,
+      credits: status.credits
+    };
+
+    res.json(normalizedStatus);
 
   } catch (error) {
     console.log('Status error:', error);

@@ -28,72 +28,63 @@ export function useEnhanceWorkflow() {
     setEnhancedImageUrl(null)
 
     try {
-      // Start enhancement
-      toast.info('Starting image enhancement...')
-      const response = await enhanceImage(image, params)
+      console.log('Starting enhancement with params:', params)
       
-      console.log('Enhancement response:', response)
+      const result = await enhanceImage(image, params)
+      console.log('Enhancement started:', result)
 
-      // Check if image is ready immediately (direct processing)
-      if (response.imageUrl) {
-        console.log('Image ready immediately')
-        setEnhancedImageUrl(response.imageUrl)
+      if (result.status === 'completed') {
+        // Direct processing (traditional models)
+        console.log('Direct processing completed')
         setProgress(100)
         setEnhancing(false)
-        toast.success('Image enhanced successfully!')
+        
+        // Create download URL
+        const downloadUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/download/${result.processId}`
+        setEnhancedImageUrl(downloadUrl)
+        toast.success('Enhancement completed!')
         return
       }
 
-      // Async processing
-      const { processId, eta } = response
-      console.log('Enhancement started with processId:', processId)
-      toast.info(`Enhancement started. Estimated time: ${Math.round(eta / 60)} minutes`)
-
-      // Poll for status
+      // Async processing (generative models)
+      console.log('Starting async polling for processId:', result.processId)
       const startTime = Date.now()
-      const pollStatus = async (): Promise<void> => {
-        try {
-          const status = await getEnhanceStatus(processId)
-          console.log('Status update:', status)
 
-          if (status.progress !== undefined) {
-            setProgress(status.progress)
+      const pollStatus = async () => {
+        try {
+          if (Date.now() - startTime > MAX_POLLING_TIME) {
+            throw new Error('Enhancement timed out after 5 minutes')
           }
 
-          switch (status.state || status.status) {
-            case 'done':
-            case 'completed':
-              setProgress(100)
-              toast.success('Enhancement completed! Downloading...')
-              
-              try {
-                const blob = await downloadEnhancedImage(processId)
-                const imageUrl = URL.createObjectURL(blob)
-                setEnhancedImageUrl(imageUrl)
-                setEnhancing(false)
-                toast.success('Image enhanced successfully!')
-              } catch (downloadError) {
-                console.error('Download error:', downloadError)
-                toast.error('Enhancement completed but download failed. Please try downloading manually.')
-                setEnhancing(false)
-              }
-              return
+          const status = await getEnhanceStatus(result.processId)
+          console.log('Status update:', status)
 
-            case 'failed':
-              throw new Error(status.error || 'Enhancement failed')
+          // Map Topaz status to our expected format
+          const normalizedState = status.status?.toLowerCase() || status.state?.toLowerCase()
+          const progress = status.progress || 0
 
-            case 'pending':
-            case 'processing':
-              // Check if we've exceeded max polling time
-              if (Date.now() - startTime > MAX_POLLING_TIME) {
-                throw new Error('Enhancement timed out after 5 minutes')
-              }
-              // Continue polling
-              setTimeout(pollStatus, POLLING_INTERVAL)
-              break
+          setProgress(progress)
 
-            default:
-              throw new Error(`Unknown status: ${status.state || status.status}`)
+          if (normalizedState === 'completed' || normalizedState === 'done') {
+            console.log('Enhancement completed!')
+            setProgress(100)
+            setEnhancing(false)
+            
+            // Create download URL
+            const downloadUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/download/${result.processId}`
+            setEnhancedImageUrl(downloadUrl)
+            toast.success('Enhancement completed!')
+            
+          } else if (normalizedState === 'failed' || normalizedState === 'error') {
+            throw new Error(status.error || 'Enhancement failed')
+            
+          } else if (normalizedState === 'processing' || normalizedState === 'pending') {
+            // Continue polling
+            setTimeout(pollStatus, POLLING_INTERVAL)
+            
+          } else {
+            console.log('Unknown status:', normalizedState, 'continuing to poll...')
+            setTimeout(pollStatus, POLLING_INTERVAL)
           }
         } catch (error) {
           console.error('Polling error:', error)

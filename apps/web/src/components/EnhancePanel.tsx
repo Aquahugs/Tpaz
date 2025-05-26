@@ -3,13 +3,9 @@ import { Button } from './ui/Button'
 import { Slider } from './ui/Slider'
 import { useEnhanceStore } from '../store/enhanceStore'
 import { useEnhanceWorkflow } from '../hooks/useEnhanceWorkflow'
+import { PRESET_CONFIGS } from '../config/presets'
+import { PresetType } from '../types/enhance'
 import { toast } from 'sonner'
-
-// Model mapping for display
-const PRESET_MODELS = {
-  basic: 'Standard V2',
-  sharp: 'High Fidelity V2'
-} as const
 
 export function EnhancePanel() {
   const { 
@@ -25,6 +21,16 @@ export function EnhancePanel() {
   const { startEnhancement } = useEnhanceWorkflow()
   const [downloading, setDownloading] = useState(false)
 
+  const currentPreset = PRESET_CONFIGS[params.preset]
+
+  const handlePresetChange = (preset: PresetType) => {
+    const config = PRESET_CONFIGS[preset]
+    setParams({
+      preset,
+      ...config.defaultParams
+    })
+  }
+
   const handleDownload = async () => {
     if (!enhancedImageUrl) return
     
@@ -32,7 +38,7 @@ export function EnhancePanel() {
     try {
       const link = document.createElement('a')
       link.href = enhancedImageUrl
-      link.download = `enhanced-image-${Date.now()}.jpg`
+      link.download = `enhanced-${params.preset}-${Date.now()}.jpg`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -51,29 +57,301 @@ export function EnhancePanel() {
   }
 
   const handleReset = () => {
+    const config = PRESET_CONFIGS[params.preset]
     setParams({
-      preset: 'basic',
-      detail: 0.5,
-      scale: 2
+      preset: params.preset,
+      ...config.defaultParams
     })
   }
 
+  const renderPresetGrid = () => {
+    const presets = Object.values(PRESET_CONFIGS)
+    
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        {presets.map((preset) => (
+          <button
+            key={preset.key}
+            onClick={() => handlePresetChange(preset.key)}
+            disabled={enhancing}
+            className={`
+              p-4 rounded-xl text-left transition-all duration-200 border relative
+              ${params.preset === preset.key
+                ? 'bg-blue-600/20 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:border-gray-600'
+              }
+              ${enhancing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-lg">{preset.icon}</span>
+              {preset.isAsync && (
+                <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full">
+                  ASYNC
+                </span>
+              )}
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-medium text-sm">{preset.label}</h4>
+              <p className="text-xs text-gray-400 leading-tight">{preset.description}</p>
+              <p className="text-xs text-blue-400 font-medium">{preset.model}</p>
+            </div>
+            {params.preset === preset.key && (
+              <div className="absolute top-2 right-2 w-2 h-2 bg-blue-400 rounded-full"></div>
+            )}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  const renderParameterControls = () => {
+    const preset = params.preset
+    
+    return (
+      <div className="space-y-6">
+        {/* Universal Detail Parameter */}
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-gray-300 text-sm">
+              {preset === 'recovery' ? 'Detail Reconstruction' : 
+               preset === 'superfocus' ? 'Focus Detail' : 'Detail'}
+            </span>
+            <span className="text-white text-sm font-medium">{params.detail?.toFixed(1) || '0.5'}</span>
+          </div>
+          <Slider
+            value={[params.detail || 0.5]}
+            onValueChange={([value]) => setParams({ detail: value })}
+            min={0}
+            max={1}
+            step={0.1}
+            disabled={enhancing}
+            className="w-full"
+          />
+        </div>
+
+        {/* Redefine-specific controls */}
+        {preset === 'redefine' && (
+          <>
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Creativity</span>
+                <span className="text-white text-sm font-medium">{params.creativity || 3}</span>
+              </div>
+              <Slider
+                value={[params.creativity || 3]}
+                onValueChange={([value]) => setParams({ creativity: Math.round(value) })}
+                min={1}
+                max={6}
+                step={1}
+                disabled={enhancing}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Lower = photo-realistic, Higher = more artistic liberties
+              </p>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Texture</span>
+                <span className="text-white text-sm font-medium">{params.texture || 2}</span>
+              </div>
+              <Slider
+                value={[params.texture || 2]}
+                onValueChange={([value]) => setParams({ texture: Math.round(value) })}
+                min={1}
+                max={5}
+                step={1}
+                disabled={enhancing}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-gray-300 text-sm">Prompt Mode</span>
+                <button
+                  onClick={() => setParams({ autoprompt: !params.autoprompt })}
+                  disabled={enhancing}
+                  className={`
+                    px-3 py-1 rounded-lg text-xs font-medium transition-colors
+                    ${params.autoprompt 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }
+                  `}
+                >
+                  {params.autoprompt ? 'Auto' : 'Manual'}
+                </button>
+              </div>
+              
+              {!params.autoprompt && (
+                <textarea
+                  value={params.prompt || ''}
+                  onChange={(e) => setParams({ prompt: e.target.value })}
+                  placeholder="Describe the desired look (e.g., 'winter mountain at dawn')"
+                  disabled={enhancing}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 resize-none"
+                  rows={3}
+                  maxLength={1024}
+                />
+              )}
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Sharpen</span>
+                <span className="text-white text-sm font-medium">{params.sharpen?.toFixed(1) || '0.3'}</span>
+              </div>
+              <Slider
+                value={[params.sharpen || 0.3]}
+                onValueChange={([value]) => setParams({ sharpen: value })}
+                min={0}
+                max={1}
+                step={0.1}
+                disabled={enhancing}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Denoise</span>
+                <span className="text-white text-sm font-medium">{params.denoise?.toFixed(1) || '0.2'}</span>
+              </div>
+              <Slider
+                value={[params.denoise || 0.2]}
+                onValueChange={([value]) => setParams({ denoise: value })}
+                min={0}
+                max={1}
+                step={0.1}
+                disabled={enhancing}
+                className="w-full"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Super Focus-specific controls */}
+        {preset === 'superfocus' && (
+          <>
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Focus Boost</span>
+                <span className="text-white text-sm font-medium">{params.focus_boost?.toFixed(1) || '0.7'}</span>
+              </div>
+              <Slider
+                value={[params.focus_boost || 0.7]}
+                onValueChange={([value]) => setParams({ focus_boost: value })}
+                min={0.25}
+                max={1}
+                step={0.05}
+                disabled={enhancing}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Higher values for very soft images (0.7-0.9)
+              </p>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Seed (Optional)</span>
+                <button
+                  onClick={() => setParams({ seed: Math.floor(Math.random() * 10000) })}
+                  disabled={enhancing}
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Random
+                </button>
+              </div>
+              <input
+                type="number"
+                value={params.seed || ''}
+                onChange={(e) => setParams({ seed: e.target.value ? parseInt(e.target.value) : undefined })}
+                placeholder="Leave empty for random"
+                disabled={enhancing}
+                className="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Traditional models - additional controls */}
+        {(preset === 'basic' || preset === 'sharp') && (
+          <>
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-gray-300 text-sm">Denoise</span>
+                <span className="text-white text-sm font-medium">{params.denoise?.toFixed(1) || '0.0'}</span>
+              </div>
+              <Slider
+                value={[params.denoise || 0]}
+                onValueChange={([value]) => setParams({ denoise: value })}
+                min={0}
+                max={1}
+                step={0.1}
+                disabled={enhancing}
+                className="w-full"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Universal Scale Control */}
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-gray-300 text-sm">Upscale</span>
+            <span className="text-white text-sm font-medium">{params.scale}x</span>
+          </div>
+          <div className="flex gap-2">
+            {[1, 2, 4].map((scale) => (
+              <button
+                key={scale}
+                onClick={() => setParams({ scale: scale as 1 | 2 | 4 })}
+                disabled={enhancing}
+                className={`
+                  flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
+                  ${params.scale === scale
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                  }
+                  ${enhancing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                `}
+              >
+                {scale}x
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="w-80 bg-gray-900/95 backdrop-blur-sm border-l border-gray-800/50 flex flex-col h-screen">
+    <div className="w-96 bg-gray-900/95 backdrop-blur-sm border-l border-gray-800/50 flex flex-col h-screen">
       {/* Header */}
       <div className="p-6 border-b border-gray-800/50 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Enhance</h2>
-          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+          <div className={`w-2 h-2 rounded-full ${currentPreset.category === 'generative' ? 'bg-orange-400' : 'bg-green-400'}`}></div>
         </div>
         {image && (
           <div className="mt-3 space-y-1">
             <p className="text-gray-400 text-sm">
               {image.name} ({Math.round(image.size / 1024)}KB)
             </p>
-            <p className="text-blue-400 text-xs font-medium">
-              Model: {PRESET_MODELS[params.preset]}
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-400 text-xs font-medium">
+                {currentPreset.model}
+              </span>
+              {currentPreset.isAsync && (
+                <span className="text-orange-400 text-xs bg-orange-500/20 px-2 py-0.5 rounded-full">
+                  ASYNC
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -94,116 +372,27 @@ export function EnhancePanel() {
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 space-y-6">
-              {/* Presets */}
+              {/* Model Selection */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-white font-medium">Presets</h3>
-                  <button className="text-gray-400 hover:text-white transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
+                  <h3 className="text-white font-medium">Enhancement Models</h3>
                 </div>
-                <div className="space-y-3">
-                  {[
-                    { key: 'basic', label: 'Basic', description: 'Balanced enhancement' },
-                    { key: 'sharp', label: 'Sharp', description: 'Enhanced detail & sharpness' }
-                  ].map((preset) => (
-                    <button
-                      key={preset.key}
-                      onClick={() => setParams({ preset: preset.key as 'basic' | 'sharp' })}
-                      disabled={enhancing}
-                      className={`
-                        w-full p-4 rounded-xl text-left transition-all duration-200 border
-                        ${params.preset === preset.key
-                          ? 'bg-blue-600/20 border-blue-500 text-white'
-                          : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:border-gray-600'
-                        }
-                        ${enhancing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                      `}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium">{preset.label}</span>
-                        {params.preset === preset.key && (
-                          <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400">{preset.description}</p>
-                      <p className="text-xs text-blue-400 mt-1 font-medium">
-                        {PRESET_MODELS[preset.key as keyof typeof PRESET_MODELS]}
-                      </p>
-                    </button>
-                  ))}
-                </div>
+                {renderPresetGrid()}
               </div>
 
-              {/* Settings */}
+              {/* Parameter Controls */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-white font-medium">Settings</h3>
-                  <button className="text-gray-400 hover:text-white transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
+                  <h3 className="text-white font-medium">Parameters</h3>
+                  <button
+                    onClick={handleReset}
+                    disabled={enhancing}
+                    className="text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    Reset
                   </button>
                 </div>
-                
-                <div className="space-y-6">
-                  {/* Detail Slider */}
-                  <div>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-gray-300 text-sm">Detail</span>
-                      <span className="text-white text-sm font-medium">{params.detail.toFixed(1)}</span>
-                    </div>
-                    <div className="relative">
-                      <Slider
-                        value={[params.detail]}
-                        onValueChange={([value]) => setParams({ detail: value })}
-                        min={0}
-                        max={1}
-                        step={0.1}
-                        disabled={enhancing}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Upscale */}
-                  <div>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-gray-300 text-sm">Upscale</span>
-                      <span className="text-white text-sm font-medium">{params.scale}x</span>
-                    </div>
-                    <div className="flex gap-2">
-                      {[1, 2, 4].map((scale) => (
-                        <button
-                          key={scale}
-                          onClick={() => setParams({ scale: scale as 1 | 2 | 4 })}
-                          disabled={enhancing}
-                          className={`
-                            flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200
-                            ${params.scale === scale
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-                            }
-                            ${enhancing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                          `}
-                        >
-                          {scale}x
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reset Button */}
-                <button
-                  onClick={handleReset}
-                  disabled={enhancing}
-                  className="w-full mt-6 py-2 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                >
-                  Reset
-                </button>
+                {renderParameterControls()}
               </div>
 
               {/* Progress */}
@@ -221,7 +410,8 @@ export function EnhancePanel() {
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-gray-400">
-                      Processing with {PRESET_MODELS[params.preset]}
+                      Processing with {currentPreset.model}
+                      {currentPreset.isAsync && ' (Async)'}
                     </p>
                   </div>
                 </div>
@@ -238,11 +428,13 @@ export function EnhancePanel() {
                 w-full py-4 rounded-xl font-medium text-white transition-all duration-200
                 ${enhancing
                   ? 'bg-gray-700 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-600/25'
+                  : currentPreset.category === 'generative'
+                    ? 'bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-500 hover:to-orange-600 shadow-lg shadow-orange-600/25'
+                    : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-600/25'
                 }
               `}
             >
-              {enhancing ? 'Enhancing...' : 'Enhance'}
+              {enhancing ? 'Enhancing...' : `Enhance with ${currentPreset.label}`}
             </button>
             
             {enhancedImageUrl && (
