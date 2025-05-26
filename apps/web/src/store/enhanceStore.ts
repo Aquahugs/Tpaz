@@ -26,7 +26,7 @@ const defaultParams: EnhanceParams = {
 export const useEnhanceStore = create<EnhanceStore>((set) => ({
   image: null,
   params: defaultParams,
-  isEnhancing: false,
+  enhancing: false,
   progress: 0,
   error: null,
   enhancedImageUrl: null,
@@ -35,13 +35,13 @@ export const useEnhanceStore = create<EnhanceStore>((set) => ({
   setParams: (newParams) => set((state) => ({ 
     params: { ...state.params, ...newParams } 
   })),
-  setEnhancing: (isEnhancing) => set({ isEnhancing }),
+  setEnhancing: (enhancing) => set({ enhancing }),
   setProgress: (progress) => set({ progress }),
   setError: (error) => set({ error }),
   setEnhancedImageUrl: (enhancedImageUrl) => set({ enhancedImageUrl }),
   reset: () => set({
     params: defaultParams,
-    isEnhancing: false,
+    enhancing: false,
     progress: 0,
     error: null,
     enhancedImageUrl: null

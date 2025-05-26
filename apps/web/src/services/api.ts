@@ -2,6 +2,8 @@ import { EnhanceParams, EnhanceResponse, StatusResponse } from '../types/enhance
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
+console.log('API_BASE_URL:', API_BASE_URL) // Debug log
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message)
@@ -10,8 +12,11 @@ class ApiError extends Error {
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
+  console.log('Response status:', response.status, 'URL:', response.url) // Debug log
+  
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+    console.error('API Error:', response.status, errorData) // Debug log
     throw new ApiError(response.status, errorData.error || `HTTP ${response.status}`)
   }
   return response.json()
@@ -27,7 +32,10 @@ export async function enhanceImage(
   formData.append('detail', params.detail.toString())
   formData.append('scale', params.scale.toString())
 
-  const response = await fetch(`${API_BASE_URL}/api/enhance`, {
+  const url = `${API_BASE_URL}/api/enhance`
+  console.log('Making request to:', url) // Debug log
+
+  const response = await fetch(url, {
     method: 'POST',
     body: formData,
   })
@@ -36,14 +44,20 @@ export async function enhanceImage(
 }
 
 export async function getEnhanceStatus(processId: string): Promise<StatusResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/status/${processId}`)
+  const url = `${API_BASE_URL}/api/status/${processId}`
+  console.log('Status check URL:', url) // Debug log
+  
+  const response = await fetch(url)
   return handleResponse<StatusResponse>(response)
 }
 
 export async function downloadEnhancedImage(processId: string): Promise<Blob> {
   console.log('Downloading enhanced image for processId:', processId)
   
-  const response = await fetch(`${API_BASE_URL}/api/download/${processId}`)
+  const url = `${API_BASE_URL}/api/download/${processId}`
+  console.log('Download URL:', url) // Debug log
+  
+  const response = await fetch(url)
   
   console.log('Download response status:', response.status)
   console.log('Download response headers:', Object.fromEntries(response.headers.entries()))

@@ -16,13 +16,16 @@ export interface EnhanceState {
 export interface EnhanceResponse {
   processId: string;
   eta: number;
+  status?: string;
+  imageUrl?: string; // For direct processing
 }
 
 export interface StatusResponse {
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  progress: number
-  output_url?: string
-  output_width?: number
-  output_height?: number
-  error?: string
+  state?: 'pending' | 'processing' | 'done' | 'failed';
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+  output_url?: string;
+  output_width?: number;
+  output_height?: number;
+  error?: string;
 } 

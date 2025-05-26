@@ -30,8 +30,22 @@ export function useEnhanceWorkflow() {
     try {
       // Start enhancement
       toast.info('Starting image enhancement...')
-      const { processId, eta } = await enhanceImage(image, params)
+      const response = await enhanceImage(image, params)
       
+      console.log('Enhancement response:', response)
+
+      // Check if image is ready immediately (direct processing)
+      if (response.imageUrl) {
+        console.log('Image ready immediately')
+        setEnhancedImageUrl(response.imageUrl)
+        setProgress(100)
+        setEnhancing(false)
+        toast.success('Image enhanced successfully!')
+        return
+      }
+
+      // Async processing
+      const { processId, eta } = response
       console.log('Enhancement started with processId:', processId)
       toast.info(`Enhancement started. Estimated time: ${Math.round(eta / 60)} minutes`)
 
@@ -42,32 +56,22 @@ export function useEnhanceWorkflow() {
           const status = await getEnhanceStatus(processId)
           console.log('Status update:', status)
 
-          if (status.progress) {
+          if (status.progress !== undefined) {
             setProgress(status.progress)
           }
 
-          switch (status.state) {
+          switch (status.state || status.status) {
             case 'done':
-              toast.info('Enhancement completed! Downloading image...')
+            case 'completed':
+              setProgress(100)
+              toast.success('Enhancement completed! Downloading...')
               
               try {
-                console.log('Starting download for processId:', processId)
-                // Download the enhanced image
                 const blob = await downloadEnhancedImage(processId)
-                console.log('Downloaded blob:', blob.size, 'bytes, type:', blob.type)
-                
-                const url = URL.createObjectURL(blob)
-                console.log('Created blob URL:', url)
-                
-                setEnhancedImageUrl(url)
+                const imageUrl = URL.createObjectURL(blob)
+                setEnhancedImageUrl(imageUrl)
                 setEnhancing(false)
-                
-                // Show completion info
-                const info = status.output_width && status.output_height 
-                  ? `Enhanced to ${status.output_width}x${status.output_height}px`
-                  : 'Enhancement completed'
-                
-                toast.success(info)
+                toast.success('Image enhanced successfully!')
               } catch (downloadError) {
                 console.error('Download error:', downloadError)
                 toast.error('Enhancement completed but download failed. Please try downloading manually.')
@@ -89,7 +93,7 @@ export function useEnhanceWorkflow() {
               break
 
             default:
-              throw new Error(`Unknown status: ${status.state}`)
+              throw new Error(`Unknown status: ${status.state || status.status}`)
           }
         } catch (error) {
           console.error('Polling error:', error)

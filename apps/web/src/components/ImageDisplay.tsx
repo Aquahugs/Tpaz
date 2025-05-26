@@ -35,7 +35,7 @@ export function ImageDisplay({ src, alt, className = '' }: ImageDisplayProps) {
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full flex items-center justify-center">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
           <div className="text-center text-gray-400">
@@ -47,7 +47,7 @@ export function ImageDisplay({ src, alt, className = '' }: ImageDisplayProps) {
       <img
         src={src}
         alt={alt}
-        className={`${className} ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+        className={`max-w-full max-h-full object-contain ${className} ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         onLoad={handleLoad}
         onError={handleError}
       />

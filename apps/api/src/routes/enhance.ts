@@ -3,6 +3,7 @@ import multer from 'multer';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { EnhanceRequestSchema, TOPAZ_MODELS, type TopazEnhanceResponse, type TopazStatusResponse } from '../types/topaz';
+import '../types/global'; // Import global type declarations
 
 const router = express.Router();
 
@@ -13,25 +14,38 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/tiff'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, and TIFF are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, TIFF, and WebP are allowed.'));
     }
   }
 });
 
 const TOPAZ_BASE_URL = 'https://api.topazlabs.com';
 
-// POST /api/enhance - Start enhancement process
+// Simple in-memory cache (replace with Redis in production)
+const imageCache: Record<string, {
+  buffer: Buffer;
+  contentType: string;
+  ready: boolean;
+}> = {};
+
+// POST /enhance - Start enhancement process
 router.post('/enhance', upload.single('image'), async (req, res, next) => {
   try {
+    console.log('=== ENHANCE REQUEST ===');
     console.log('Request body:', req.body);
-    console.log('Request file:', req.file ? 'File present' : 'No file');
+    console.log('Request file:', req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'No file');
+    console.log('Topaz API Key:', process.env.TOPAZ_API_KEY ? 'Present' : 'Missing');
     
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    if (!process.env.TOPAZ_API_KEY) {
+      return res.status(500).json({ error: 'Topaz API key not configured' });
     }
 
     // Validate request body
@@ -57,126 +71,154 @@ router.post('/enhance', upload.single('image'), async (req, res, next) => {
     const model = TOPAZ_MODELS[preset];
     formData.append('model', model);
     formData.append('sharpen', detail.toString());
-    
-    // Calculate output dimensions based on scale
-    const baseHeight = 1024;
-    formData.append('output_height', (baseHeight * scale).toString());
+    formData.append('scale', scale.toString());
 
-    console.log('Calling Topaz API with:', {
-      model,
-      sharpen: detail.toString(),
-      output_height: (baseHeight * scale).toString(),
-      filename: req.file.originalname
-    });
+    console.log('Sending request to Topaz API...');
+    console.log('Model:', model);
+    console.log('Sharpen:', detail);
+    console.log('Scale:', scale);
 
-    // Call Topaz API - corrected endpoint
-    const apiUrl = `${TOPAZ_BASE_URL}/image/v1/enhance/async`;
-    console.log('API URL:', apiUrl);
-    
-    console.log('API Key present:', !!process.env.TOPAZ_API_KEY);
-    console.log('API Key length:', process.env.TOPAZ_API_KEY?.length);
-    
-    const response = await fetch(apiUrl, {
+    // Send request to Topaz API
+    const response = await fetch(`${TOPAZ_BASE_URL}/image/v1/enhance`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.TOPAZ_API_KEY!,
-        ...formData.getHeaders()
+        'X-API-Key': process.env.TOPAZ_API_KEY
       },
       body: formData
     });
 
     console.log('Topaz API response status:', response.status);
-    
+    console.log('Topaz API response content-type:', response.headers.get('content-type'));
+
     if (!response.ok) {
       const errorText = await response.text();
       console.log('Topaz API error response:', errorText);
       throw new Error(`Topaz API error: ${response.status} ${errorText}`);
     }
 
-    const result = await response.json() as TopazEnhanceResponse;
-    console.log('Topaz API success response:', result);
+    // Check if the response is JSON (async processing) or image (direct processing)
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      // Async processing - return process ID
+      const result = await response.json() as TopazEnhanceResponse;
+      console.log('Topaz API success response (async):', result);
 
-    // Map the response to match our frontend expectations
-    const mappedResult = {
-      processId: result.process_id,  // Map process_id to processId
-      eta: result.eta
-    };
+      res.json({
+        processId: result.process_id,
+        eta: result.eta
+      });
+    } else if (contentType.includes('image/')) {
+      // Direct processing - image is ready immediately
+      console.log('Topaz API returned image directly');
+      
+      // Generate a fake process ID for consistency
+      const fakeProcessId = `direct_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Get the image buffer
+      const imageBuffer = await response.buffer();
+      
+      // Store in cache
+      imageCache[fakeProcessId] = {
+        buffer: imageBuffer,
+        contentType: contentType,
+        ready: true
+      };
 
-    res.json(mappedResult);
+      res.json({
+        processId: fakeProcessId,
+        eta: 0, // Image is ready immediately
+        status: 'completed'
+      });
+    } else {
+      throw new Error(`Unexpected response content type: ${contentType}`);
+    }
 
   } catch (error) {
-    console.log('API Error:', error);
+    console.error('Enhancement error:', error);
     next(error);
   }
 });
 
-// GET /api/status/:processId - Check enhancement status
+// GET /status/:processId - Check enhancement status
 router.get('/status/:processId', async (req, res, next) => {
   try {
     const { processId } = req.params;
-    
-    if (!processId || processId.length < 10) {
-      return res.status(400).json({ error: 'Invalid process ID format' });
-    }
-    
     console.log('Checking status for processId:', processId);
 
-    const statusUrl = `${TOPAZ_BASE_URL}/image/v1/status/${processId}`;
-    console.log('Status URL:', statusUrl);
+    // Check if this is a direct processing result
+    if (processId.startsWith('direct_')) {
+      const cached = imageCache[processId];
+      if (cached) {
+        return res.json({
+          state: 'done',
+          progress: 100,
+          status: 'completed'
+        });
+      } else {
+        return res.status(404).json({ error: 'Process not found' });
+      }
+    }
 
-    const response = await fetch(statusUrl, {
+    if (!process.env.TOPAZ_API_KEY) {
+      return res.status(500).json({ error: 'Topaz API key not configured' });
+    }
+
+    const response = await fetch(`${TOPAZ_BASE_URL}/image/v1/status/${processId}`, {
       headers: {
-        'X-API-Key': process.env.TOPAZ_API_KEY!
+        'X-API-Key': process.env.TOPAZ_API_KEY
       }
     });
 
-    console.log('Status check response status:', response.status);
+    console.log('Status response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.log('Status check error response:', errorText);
+      console.log('Status error response:', errorText);
       throw new Error(`Topaz API error: ${response.status} ${errorText}`);
     }
 
-    const result = await response.json() as any;
-    console.log('Status check success response:', result);
-    
-    // Map Topaz status to our expected format
-    const mappedResult = {
-      state: result.status === 'Completed' ? 'done' : 
-             result.status === 'Processing' ? 'processing' : 
-             result.status === 'Failed' ? 'failed' : 'pending',
-      progress: result.progress || 0,
-      // Add additional info for completed jobs
-      ...(result.status === 'Completed' && {
-        output_width: result.output_width,
-        output_height: result.output_height,
-        output_format: result.output_format,
-        credits: result.credits
-      })
-    };
-    
-    res.json(mappedResult);
+    const status = await response.json() as TopazStatusResponse;
+    console.log('Status response:', status);
+
+    res.json(status);
 
   } catch (error) {
-    console.log('Status check error:', error);
+    console.log('Status error:', error);
     next(error);
   }
 });
 
-// GET /api/download/:processId - Download enhanced image
+// GET /download/:processId - Download enhanced image
 router.get('/download/:processId', async (req, res, next) => {
   try {
     const { processId } = req.params;
     console.log('Downloading for processId:', processId);
 
-    // Correct Topaz API download endpoint
+    // Check if this is a direct processing result
+    if (processId.startsWith('direct_')) {
+      const cached = imageCache[processId];
+      if (cached) {
+        res.setHeader('Content-Type', cached.contentType);
+        res.setHeader('Content-Length', cached.buffer.length.toString());
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.send(cached.buffer);
+      } else {
+        return res.status(404).json({ error: 'Image not found' });
+      }
+    }
+
+    if (!process.env.TOPAZ_API_KEY) {
+      return res.status(500).json({ error: 'Topaz API key not configured' });
+    }
+
+    // Get download URL from Topaz API
     const downloadUrl = `${TOPAZ_BASE_URL}/image/v1/download/${processId}`;
     console.log('Download URL:', downloadUrl);
 
     const response = await fetch(downloadUrl, {
       headers: {
-        'X-API-Key': process.env.TOPAZ_API_KEY!
+        'X-API-Key': process.env.TOPAZ_API_KEY
       }
     });
 
@@ -208,8 +250,6 @@ router.get('/download/:processId', async (req, res, next) => {
     // Stream the actual image back to client
     res.setHeader('Content-Type', imageResponse.headers.get('content-type') || 'image/jpeg');
     res.setHeader('Content-Length', imageResponse.headers.get('content-length') || '');
-    
-    // Add CORS headers if needed
     res.setHeader('Access-Control-Allow-Origin', '*');
     
     imageResponse.body?.pipe(res);
@@ -220,4 +260,4 @@ router.get('/download/:processId', async (req, res, next) => {
   }
 });
 
-export { router as enhanceRouter }; 
+export { router as enhanceRouter };
