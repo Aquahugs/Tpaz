@@ -243,28 +243,6 @@ Once everything is running:
 
 ## Local Development Setup
 
-### Project Structure
-
-topaz-playground/
-├── apps/
-│ ├── web/ # React frontend (Vite + TypeScript)
-│ │ ├── src/
-│ │ │ ├── components/ # UI components
-│ │ │ ├── hooks/ # Custom React hooks
-│ │ │ ├── services/ # API client
-│ │ │ ├── store/ # Zustand state management
-│ │ │ ├── config/ # Preset configurations
-│ │ │ └── types/ # TypeScript definitions
-│ │ └── package.json
-│ └── api/ # Express.js backend
-│ ├── src/
-│ │ ├── routes/ # API endpoints
-│ │ ├── middleware/ # Express middleware
-│ │ └── types/ # TypeScript definitions
-│ └── package.json
-├── package.json # Root package.json (Turborepo)
-└── turbo.json # Turborepo configuration
-
 
 ### Usage
 
@@ -388,13 +366,7 @@ The application supports two processing modes based on the model type:
 - **State Management**: Zustand for client state
 - **Validation**: Zod schemas for type-safe API requests
 
-### Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and type checking
-5. Submit a pull request
 
 
 
